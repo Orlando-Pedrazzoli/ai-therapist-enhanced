@@ -1,0 +1,233 @@
+// prisma/schema.prisma
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mongodb"
+  url      = env("DATABASE_URL")
+}
+
+// User model with enhanced privacy
+model User {
+  id              String    @id @default(auto()) @map("_id") @db.ObjectId
+  email           String    @unique
+  hashedEmail     String    @unique // For searching without exposing email
+  passwordHash    String?
+  name            String?
+  isAnonymous     Boolean   @default(false)
+  
+  // Consent tracking
+  consentGiven    DateTime?
+  consentVersion  String?
+  dataRetention   DateTime? // Auto-delete date
+  
+  // Profile
+  age             Int?
+  location        String?   // Country/State only, not specific address
+  language        String    @default("pt-BR")
+  timezone        String    @default("America/Sao_Paulo")
+  
+  // Security
+  twoFactorEnabled Boolean  @default(false)
+  twoFactorSecret String?
+  lastLoginAt     DateTime?
+  lastLoginIp     String?
+  failedAttempts  Int       @default(0)
+  lockedUntil     DateTime?
+  
+  // Relationships
+  sessions        Session[]
+  therapySessions TherapySession[]
+  moodEntries     MoodEntry[]
+  crisisEvents    CrisisEvent[]
+  achievements    Achievement[]
+  
+  // Timestamps
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  
+  @@index([email])
+  @@index([hashedEmail])
+}
+
+// NextAuth Session
+model Session {
+  id           String   @id @default(auto()) @map("_id") @db.ObjectId
+  sessionToken String   @unique
+  userId       String   @db.ObjectId
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([userId])
+}
+
+// Therapy Session with encrypted messages
+model TherapySession {
+  id              String    @id @default(auto()) @map("_id") @db.ObjectId
+  sessionId       String    @unique @default(uuid())
+  userId          String?   @db.ObjectId // Optional for anonymous sessions
+  user            User?     @relation(fields: [userId], references: [id])
+  
+  // Session metadata
+  startedAt       DateTime  @default(now())
+  endedAt         DateTime?
+  duration        Int?      // In minutes
+  isActive        Boolean   @default(true)
+  
+  // Encrypted session data
+  encryptedData   String    // Encrypted JSON with messages
+  encryptionIv    String
+  encryptionSalt  String
+  
+  // Session analysis (non-sensitive)
+  moodStart       Int?      // 1-10 scale
+  moodEnd         Int?      // 1-10 scale
+  techniques      String[]  // CBT, DBT, Mindfulness, etc
+  topics          String[]  // Hashed topics for privacy
+  
+  // Crisis detection
+  crisisDetected  Boolean   @default(false)
+  crisisLevel     String?   // LOW, MEDIUM, HIGH, CRITICAL
+  
+  // Messages (stored separately for better encryption)
+  messages        Message[]
+  
+  // Auto-deletion
+  expiresAt       DateTime  @default(dbgenerated("new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)")) // 30 days
+  
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  
+  @@index([sessionId])
+  @@index([userId])
+}
+
+// Individual encrypted messages
+model Message {
+  id              String         @id @default(auto()) @map("_id") @db.ObjectId
+  sessionId       String         @db.ObjectId
+  session         TherapySession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  
+  role            String         // user, assistant, system
+  encryptedContent String        // Encrypted message content
+  encryptionIv    String
+  
+  // Metadata (non-sensitive)
+  timestamp       DateTime       @default(now())
+  tokenCount      Int?
+  
+  // Safety checks
+  flagged         Boolean        @default(false)
+  flagReason      String?
+  
+  @@index([sessionId])
+}
+
+// Mood tracking
+model MoodEntry {
+  id              String    @id @default(auto()) @map("_id") @db.ObjectId
+  userId          String    @db.ObjectId
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  mood            Int       // 1-10 scale
+  energy          Int?      // 1-10 scale
+  anxiety         Int?      // 1-10 scale
+  
+  // Encrypted notes
+  encryptedNotes  String?
+  encryptionIv    String?
+  
+  activities      String[]  // What user was doing
+  triggers        String[]  // What might have caused the mood
+  
+  timestamp       DateTime  @default(now())
+  
+  @@index([userId])
+  @@index([timestamp])
+}
+
+// Crisis event logging (for safety monitoring)
+model CrisisEvent {
+  id              String    @id @default(auto()) @map("_id") @db.ObjectId
+  userId          String?   @db.ObjectId
+  user            User?     @relation(fields: [userId], references: [id])
+  
+  level           String    // LOW, MEDIUM, HIGH, CRITICAL
+  triggers        String[]  // Hashed trigger words
+  
+  // Actions taken
+  resourcesShown  Boolean   @default(true)
+  contactsProvided String[] // Which emergency contacts were shown
+  userAcknowledged Boolean  @default(false)
+  
+  // Follow-up
+  resolved        Boolean   @default(false)
+  resolvedAt      DateTime?
+  followUpNeeded  Boolean   @default(true)
+  
+  timestamp       DateTime  @default(now())
+  
+  @@index([userId])
+  @@index([level])
+  @@index([timestamp])
+}
+
+// Achievements and progress tracking
+model Achievement {
+  id              String    @id @default(auto()) @map("_id") @db.ObjectId
+  userId          String    @db.ObjectId
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  type            String    // session_streak, mood_improvement, technique_mastery
+  name            String
+  description     String
+  
+  progress        Int       // 0-100 percentage
+  completed       Boolean   @default(false)
+  completedAt     DateTime?
+  
+  metadata        Json?     // Additional non-sensitive data
+  
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  
+  @@index([userId])
+  @@index([type])
+}
+
+// Audit log for compliance
+model AuditLog {
+  id              String    @id @default(auto()) @map("_id") @db.ObjectId
+  
+  action          String    // login, logout, data_access, data_export, data_delete
+  resourceType    String?   // user, session, message
+  resourceId      String?
+  
+  // Hashed user identification
+  userHash        String?
+  ipHash          String?
+  userAgent       String?
+  
+  success         Boolean   @default(true)
+  errorMessage    String?
+  
+  timestamp       DateTime  @default(now())
+  
+  @@index([action])
+  @@index([timestamp])
+}
+
+// App configuration and feature flags
+model AppConfig {
+  id              String    @id @default(auto()) @map("_id") @db.ObjectId
+  key             String    @unique
+  value           Json
+  description     String?
+  
+  updatedAt       DateTime  @updatedAt
+  updatedBy       String?   // Admin user ID
+  
+  @@index([key])
+}

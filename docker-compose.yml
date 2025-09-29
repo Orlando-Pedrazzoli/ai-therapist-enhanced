@@ -1,0 +1,89 @@
+version: '3.8'
+
+services:
+  # MongoDB Database
+  mongodb:
+    image: mongo:7.0
+    container_name: ai_therapist_mongodb
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: admin
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD:-secure_password_change_me}
+      MONGO_INITDB_DATABASE: ai_therapist
+    volumes:
+      - mongodb_data:/data/db
+      - ./init-mongo.js:/docker-entrypoint-initdb.d/init-mongo.js:ro
+    networks:
+      - ai_therapist_network
+
+  # Redis for session management and rate limiting
+  redis:
+    image: redis:7-alpine
+    container_name: ai_therapist_redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-redis_password_change_me}
+    volumes:
+      - redis_data:/data
+    networks:
+      - ai_therapist_network
+
+  # Next.js Application
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ai_therapist_app
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      NODE_ENV: ${NODE_ENV:-development}
+      DATABASE_URL: mongodb://admin:${MONGO_PASSWORD:-secure_password_change_me}@mongodb:27017/ai_therapist?authSource=admin
+      REDIS_URL: redis://default:${REDIS_PASSWORD:-redis_password_change_me}@redis:6379
+      NEXTAUTH_URL: ${NEXTAUTH_URL:-http://localhost:3000}
+      NEXTAUTH_SECRET: ${NEXTAUTH_SECRET}
+      GOOGLE_GEMINI_API_KEY: ${GOOGLE_GEMINI_API_KEY}
+      ENCRYPTION_MASTER_KEY: ${ENCRYPTION_MASTER_KEY}
+      AUDIT_ENCRYPTION_KEY: ${AUDIT_ENCRYPTION_KEY}
+    depends_on:
+      - mongodb
+      - redis
+    volumes:
+      - ./:/app
+      - /app/node_modules
+      - /app/.next
+    networks:
+      - ai_therapist_network
+    command: sh -c "npm run dev"
+
+  # MongoDB Express (Web-based MongoDB admin interface) - Development only
+  mongo-express:
+    image: mongo-express:latest
+    container_name: ai_therapist_mongo_express
+    restart: unless-stopped
+    ports:
+      - "8081:8081"
+    environment:
+      ME_CONFIG_MONGODB_ADMINUSERNAME: admin
+      ME_CONFIG_MONGODB_ADMINPASSWORD: ${MONGO_PASSWORD:-secure_password_change_me}
+      ME_CONFIG_MONGODB_URL: mongodb://admin:${MONGO_PASSWORD:-secure_password_change_me}@mongodb:27017/
+      ME_CONFIG_BASICAUTH_USERNAME: ${MONGO_EXPRESS_USER:-admin}
+      ME_CONFIG_BASICAUTH_PASSWORD: ${MONGO_EXPRESS_PASSWORD:-admin_password_change_me}
+    depends_on:
+      - mongodb
+    networks:
+      - ai_therapist_network
+    profiles:
+      - dev
+
+networks:
+  ai_therapist_network:
+    driver: bridge
+
+volumes:
+  mongodb_data:
+  redis_data:

@@ -1,114 +1,198 @@
-// app/api/therapy/session/route.ts
+// app/api/therapy/session/[sessionId]/route.ts
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
 import { prisma } from '@/lib/prisma';
-import { DataEncryption } from '@/lib/security/encryption';
+import { DataEncryption, SessionEncryption } from '@/lib/security/encryption';
 import { getAuditLog } from '@/lib/security/encryption';
-import { v4 as uuidv4 } from 'uuid';
 
-// Create new therapy session
-export async function POST(req: NextRequest) {
+// GET - Obter uma sessão específica
+export async function GET(
+  req: NextRequest,
+  { params }: { params: { sessionId: string } }
+) {
   try {
-    const body = await req.json();
-    const { anonymous = false } = body;
-    
-    // Get user session if not anonymous
-    let userId = null;
-    if (!anonymous) {
-      const session = await getServerSession();
-      if (session?.user?.id) {
-        userId = session.user.id;
-      }
+    const { sessionId } = params;
+
+    if (!sessionId) {
+      return NextResponse.json(
+        { error: 'Session ID is required' },
+        { status: 400 }
+      );
     }
-    
-    // Create session ID
-    const sessionId = uuidv4();
-    
-    // Initialize encryption
-    const encryption = new DataEncryption(process.env.ENCRYPTION_MASTER_KEY!);
-    const initialData = {
-      messages: [],
-      metadata: {
-        createdAt: new Date().toISOString(),
-        language: 'pt-BR',
-      },
-    };
-    
-    // Encrypt session data
-    const encryptedData = encryption.encryptObject(initialData);
-    
-    // Create session in database
-    const therapySession = await prisma.therapySession.create({
-      data: {
-        sessionId,
-        userId,
-        encryptedData: encryptedData.data,
-        encryptionIv: encryptedData.iv,
-        encryptionSalt: encryptedData.salt,
-        startedAt: new Date(),
-        isActive: true,
-        techniques: [],
-        topics: [],
+
+    const therapySession = await prisma.therapySession.findUnique({
+      where: { sessionId },
+      include: {
+        messages: {
+          orderBy: { timestamp: 'asc' },
+          take: 50,
+        },
       },
     });
-    
+
+    if (!therapySession) {
+      return NextResponse.json({ error: 'Session not found' }, { status: 404 });
+    }
+
+    // Decrypt session data if needed
+    const encryption = new DataEncryption(process.env.ENCRYPTION_MASTER_KEY!);
+    const sessionEncryption = new SessionEncryption(sessionId);
+
+    // Decrypt messages
+    const decryptedMessages = therapySession.messages.map(msg => {
+      try {
+        const decrypted = sessionEncryption.decryptMessage({
+          data: msg.encryptedContent,
+          iv: msg.encryptionIv,
+          salt: '',
+          timestamp: msg.timestamp.getTime(),
+        });
+
+        return {
+          id: msg.id,
+          role: msg.role,
+          content: decrypted,
+          timestamp: msg.timestamp,
+          flagged: msg.flagged,
+        };
+      } catch (error) {
+        console.error('Error decrypting message:', error);
+        return {
+          id: msg.id,
+          role: msg.role,
+          content: '[Unable to decrypt message]',
+          timestamp: msg.timestamp,
+          flagged: msg.flagged,
+        };
+      }
+    });
+
     // Audit log
     const auditLog = getAuditLog();
-    auditLog.logAccess(userId || 'anonymous', 'create_session', sessionId);
-    
+    auditLog.logAccess(
+      therapySession.userId || 'anonymous',
+      'get_session',
+      sessionId
+    );
+
     return NextResponse.json({
       sessionId: therapySession.sessionId,
       isActive: therapySession.isActive,
       startedAt: therapySession.startedAt,
-      anonymous: !userId,
+      endedAt: therapySession.endedAt,
+      messages: decryptedMessages,
+      moodStart: therapySession.moodStart,
+      moodEnd: therapySession.moodEnd,
+      techniques: therapySession.techniques,
+      topics: therapySession.topics,
+      anonymous: !therapySession.userId,
     });
-    
   } catch (error) {
-    console.error('Error creating therapy session:', error);
+    console.error('Error fetching session:', error);
     return NextResponse.json(
-      { error: 'Failed to create session' },
+      { error: 'Failed to fetch session' },
       { status: 500 }
     );
   }
 }
 
-// Get all sessions for authenticated user
-export async function GET(req: NextRequest) {
+// PUT - Atualizar uma sessão (ex: finalizar, atualizar mood)
+export async function PUT(
+  req: NextRequest,
+  { params }: { params: { sessionId: string } }
+) {
   try {
-    const session = await getServerSession();
-    if (!session?.user?.id) {
+    const { sessionId } = params;
+    const body = await req.json();
+
+    if (!sessionId) {
       return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
+        { error: 'Session ID is required' },
+        { status: 400 }
       );
     }
-    
-    const sessions = await prisma.therapySession.findMany({
-      where: {
-        userId: session.user.id,
-        isActive: true,
-      },
-      select: {
-        sessionId: true,
-        startedAt: true,
-        endedAt: true,
-        moodStart: true,
-        moodEnd: true,
-        techniques: true,
-        topics: true,
-      },
-      orderBy: {
-        startedAt: 'desc',
-      },
-      take: 20,
+
+    const { moodEnd, endSession } = body;
+
+    const updateData: any = {};
+
+    if (moodEnd !== undefined) {
+      updateData.moodEnd = moodEnd;
+    }
+
+    if (endSession) {
+      updateData.isActive = false;
+      updateData.endedAt = new Date();
+    }
+
+    const updatedSession = await prisma.therapySession.update({
+      where: { sessionId },
+      data: updateData,
     });
-    
-    return NextResponse.json({ sessions });
-    
+
+    // Audit log
+    const auditLog = getAuditLog();
+    auditLog.logAccess(
+      updatedSession.userId || 'anonymous',
+      'update_session',
+      sessionId
+    );
+
+    return NextResponse.json({
+      success: true,
+      sessionId: updatedSession.sessionId,
+      isActive: updatedSession.isActive,
+      endedAt: updatedSession.endedAt,
+      moodEnd: updatedSession.moodEnd,
+    });
   } catch (error) {
-    console.error('Error fetching sessions:', error);
+    console.error('Error updating session:', error);
     return NextResponse.json(
-      { error: 'Failed to fetch sessions' },
+      { error: 'Failed to update session' },
+      { status: 500 }
+    );
+  }
+}
+
+// DELETE - Deletar uma sessão (soft delete)
+export async function DELETE(
+  req: NextRequest,
+  { params }: { params: { sessionId: string } }
+) {
+  try {
+    const { sessionId } = params;
+
+    if (!sessionId) {
+      return NextResponse.json(
+        { error: 'Session ID is required' },
+        { status: 400 }
+      );
+    }
+
+    // Soft delete - apenas marca como inativa
+    const deletedSession = await prisma.therapySession.update({
+      where: { sessionId },
+      data: {
+        isActive: false,
+        endedAt: new Date(),
+      },
+    });
+
+    // Audit log
+    const auditLog = getAuditLog();
+    auditLog.logAccess(
+      deletedSession.userId || 'anonymous',
+      'delete_session',
+      sessionId
+    );
+
+    return NextResponse.json({
+      success: true,
+      message: 'Session deleted successfully',
+    });
+  } catch (error) {
+    console.error('Error deleting session:', error);
+    return NextResponse.json(
+      { error: 'Failed to delete session' },
       { status: 500 }
     );
   }

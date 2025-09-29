@@ -2,7 +2,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
-  
+
   // Security headers
   async headers() {
     return [
@@ -11,62 +11,63 @@ const nextConfig = {
         headers: [
           {
             key: 'X-DNS-Prefetch-Control',
-            value: 'on'
+            value: 'on',
           },
           {
             key: 'Strict-Transport-Security',
-            value: 'max-age=63072000; includeSubDomains; preload'
+            value: 'max-age=63072000; includeSubDomains; preload',
           },
           {
             key: 'X-Content-Type-Options',
-            value: 'nosniff'
+            value: 'nosniff',
           },
           {
             key: 'X-Frame-Options',
-            value: 'SAMEORIGIN'
+            value: 'SAMEORIGIN',
           },
           {
             key: 'X-XSS-Protection',
-            value: '1; mode=block'
+            value: '1; mode=block',
           },
           {
             key: 'Referrer-Policy',
-            value: 'strict-origin-when-cross-origin'
+            value: 'strict-origin-when-cross-origin',
           },
           {
             key: 'Permissions-Policy',
-            value: 'camera=(), microphone=(), geolocation=(), interest-cohort=()'
+            value:
+              'camera=(), microphone=(), geolocation=(), interest-cohort=()',
           },
           {
             key: 'Content-Security-Policy',
-            value: ContentSecurityPolicy.replace(/\s{2,}/g, ' ').trim()
-          }
-        ]
-      }
-    ]
+            value: ContentSecurityPolicy.replace(/\s{2,}/g, ' ').trim(),
+          },
+        ],
+      },
+    ];
   },
-  
+
   // Environment variables validation
   env: {
     NEXT_PUBLIC_APP_NAME: 'AI Wellness Assistant',
     NEXT_PUBLIC_APP_VERSION: '1.0.0',
   },
-  
+
   // Image optimization
   images: {
     domains: ['localhost'],
     formats: ['image/avif', 'image/webp'],
   },
-  
-  // Experimental features
+
+  // Experimental features - REMOVIDO serverActions (não mais necessário)
   experimental: {
-    serverActions: true,
+    // serverActions já está habilitado por padrão no Next.js 14
   },
-  
+
   // Production optimizations
   poweredByHeader: false,
   compress: true,
-  
+
   // Webpack configuration
   webpack: (config, { isServer }) => {
     // Add custom webpack configurations here if needed
@@ -80,7 +81,7 @@ const nextConfig = {
     }
     return config;
   },
-}
+};
 
 // Content Security Policy
 const ContentSecurityPolicy = `
@@ -97,6 +98,6 @@ const ContentSecurityPolicy = `
   form-action 'self';
   frame-ancestors 'none';
   upgrade-insecure-requests;
-`
+`;
 
-export default nextConfig
+export default nextConfig;

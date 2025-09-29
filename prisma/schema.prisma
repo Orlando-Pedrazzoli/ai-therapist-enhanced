@@ -13,7 +13,7 @@ datasource db {
 model User {
   id              String    @id @default(auto()) @map("_id") @db.ObjectId
   email           String    @unique
-  hashedEmail     String    @unique // For searching without exposing email
+  hashedEmail     String    @unique
   passwordHash    String?
   name            String?
   isAnonymous     Boolean   @default(false)
@@ -21,11 +21,11 @@ model User {
   // Consent tracking
   consentGiven    DateTime?
   consentVersion  String?
-  dataRetention   DateTime? // Auto-delete date
+  dataRetention   DateTime?
   
   // Profile
   age             Int?
-  location        String?   // Country/State only, not specific address
+  location        String?
   language        String    @default("pt-BR")
   timezone        String    @default("America/Sao_Paulo")
   
@@ -47,9 +47,6 @@ model User {
   // Timestamps
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
-  
-  @@index([email])
-  @@index([hashedEmail])
 }
 
 // NextAuth Session
@@ -67,40 +64,39 @@ model Session {
 model TherapySession {
   id              String    @id @default(auto()) @map("_id") @db.ObjectId
   sessionId       String    @unique @default(uuid())
-  userId          String?   @db.ObjectId // Optional for anonymous sessions
+  userId          String?   @db.ObjectId
   user            User?     @relation(fields: [userId], references: [id])
   
   // Session metadata
   startedAt       DateTime  @default(now())
   endedAt         DateTime?
-  duration        Int?      // In minutes
+  duration        Int?
   isActive        Boolean   @default(true)
   
   // Encrypted session data
-  encryptedData   String    // Encrypted JSON with messages
+  encryptedData   String
   encryptionIv    String
   encryptionSalt  String
   
   // Session analysis (non-sensitive)
-  moodStart       Int?      // 1-10 scale
-  moodEnd         Int?      // 1-10 scale
-  techniques      String[]  // CBT, DBT, Mindfulness, etc
-  topics          String[]  // Hashed topics for privacy
+  moodStart       Int?
+  moodEnd         Int?
+  techniques      String[]
+  topics          String[]
   
   // Crisis detection
   crisisDetected  Boolean   @default(false)
-  crisisLevel     String?   // LOW, MEDIUM, HIGH, CRITICAL
+  crisisLevel     String?
   
   // Messages (stored separately for better encryption)
   messages        Message[]
   
   // Auto-deletion
-  expiresAt       DateTime  @default(dbgenerated("new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)")) // 30 days
+  expiresAt       DateTime?
   
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
   
-  @@index([sessionId])
   @@index([userId])
 }
 
@@ -110,8 +106,8 @@ model Message {
   sessionId       String         @db.ObjectId
   session         TherapySession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
   
-  role            String         // user, assistant, system
-  encryptedContent String        // Encrypted message content
+  role            String
+  encryptedContent String
   encryptionIv    String
   
   // Metadata (non-sensitive)
@@ -131,16 +127,16 @@ model MoodEntry {
   userId          String    @db.ObjectId
   user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   
-  mood            Int       // 1-10 scale
-  energy          Int?      // 1-10 scale
-  anxiety         Int?      // 1-10 scale
+  mood            Int
+  energy          Int?
+  anxiety         Int?
   
   // Encrypted notes
   encryptedNotes  String?
   encryptionIv    String?
   
-  activities      String[]  // What user was doing
-  triggers        String[]  // What might have caused the mood
+  activities      String[]
+  triggers        String[]
   
   timestamp       DateTime  @default(now())
   
@@ -154,12 +150,12 @@ model CrisisEvent {
   userId          String?   @db.ObjectId
   user            User?     @relation(fields: [userId], references: [id])
   
-  level           String    // LOW, MEDIUM, HIGH, CRITICAL
-  triggers        String[]  // Hashed trigger words
+  level           String
+  triggers        String[]
   
   // Actions taken
   resourcesShown  Boolean   @default(true)
-  contactsProvided String[] // Which emergency contacts were shown
+  contactsProvided String[]
   userAcknowledged Boolean  @default(false)
   
   // Follow-up
@@ -180,15 +176,15 @@ model Achievement {
   userId          String    @db.ObjectId
   user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   
-  type            String    // session_streak, mood_improvement, technique_mastery
+  type            String
   name            String
   description     String
   
-  progress        Int       // 0-100 percentage
+  progress        Int
   completed       Boolean   @default(false)
   completedAt     DateTime?
   
-  metadata        Json?     // Additional non-sensitive data
+  metadata        Json?
   
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
@@ -201,8 +197,8 @@ model Achievement {
 model AuditLog {
   id              String    @id @default(auto()) @map("_id") @db.ObjectId
   
-  action          String    // login, logout, data_access, data_export, data_delete
-  resourceType    String?   // user, session, message
+  action          String
+  resourceType    String?
   resourceId      String?
   
   // Hashed user identification
@@ -227,7 +223,5 @@ model AppConfig {
   description     String?
   
   updatedAt       DateTime  @updatedAt
-  updatedBy       String?   // Admin user ID
-  
-  @@index([key])
+  updatedBy       String?
 }

@@ -25,11 +25,17 @@ export class DataEncryption {
       keySize: 256,
     };
 
-    // Use environment variable or generate secure key
-    this.masterKey = masterKey || process.env.ENCRYPTION_MASTER_KEY || '';
-    
-    if (!this.masterKey) {
-      throw new Error('Encryption master key is required');
+    // No cliente, use uma chave temporária (não para produção!)
+    if (typeof window !== 'undefined') {
+      // Cliente - use chave temporária
+      this.masterKey = masterKey || 'temporary-client-key-not-for-production';
+    } else {
+      // Servidor - use a chave real
+      this.masterKey = masterKey || process.env.ENCRYPTION_MASTER_KEY || '';
+
+      if (!this.masterKey) {
+        throw new Error('Encryption master key is required');
+      }
     }
   }
 
@@ -125,7 +131,10 @@ export class DataEncryption {
   /**
    * Encrypt an entire object
    */
-  public encryptObject<T extends object>(obj: T, userKey?: string): EncryptedData {
+  public encryptObject<T extends object>(
+    obj: T,
+    userKey?: string
+  ): EncryptedData {
     const jsonString = JSON.stringify(obj);
     return this.encrypt(jsonString, userKey);
   }

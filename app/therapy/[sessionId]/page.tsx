@@ -4,18 +4,18 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
-import { 
-  Send, 
-  Bot, 
-  User, 
-  Loader2, 
-  AlertCircle, 
+import {
+  Send,
+  Bot,
+  User,
+  Loader2,
+  AlertCircle,
   Heart,
   Shield,
   Phone,
   Activity,
   Brain,
-  Sparkles
+  Sparkles,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import ReactMarkdown from 'react-markdown';
@@ -25,7 +25,10 @@ import { CrisisModal } from '@/components/safety/CrisisModal';
 import { LegalDisclaimer } from '@/components/safety/LegalDisclaimer';
 
 // Security & AI
-import { getCrisisDetector, type CrisisLevel } from '@/lib/security/crisis-detection';
+import {
+  getCrisisDetector,
+  type CrisisLevel,
+} from '@/lib/security/crisis-detection';
 import { SessionEncryption } from '@/lib/security/encryption';
 import { getPromptSystem } from '@/lib/ai/therapy-prompts';
 
@@ -53,7 +56,7 @@ export default function TherapyPage() {
   const router = useRouter();
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
-  
+
   // State
   const [session, setSession] = useState<SessionData | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -65,7 +68,7 @@ export default function TherapyPage() {
   const [crisisInfo, setCrisisInfo] = useState<any>(null);
   const [userMood, setUserMood] = useState<number | null>(null);
   const [emergencyMode, setEmergencyMode] = useState(false);
-  
+
   // Security instances
   const crisisDetector = getCrisisDetector('pt-BR');
   const promptSystem = getPromptSystem('pt-BR');
@@ -77,11 +80,11 @@ export default function TherapyPage() {
       try {
         setIsLoading(true);
         const sessionId = params.sessionId as string;
-        
+
         // Create encryption instance for this session
-        const sessionEncryption = new SessionEncryption(sessionId);
-        setEncryption(sessionEncryption);
-        
+        //const sessionEncryption = new SessionEncryption(sessionId);
+        // setEncryption(sessionEncryption);
+
         // Check if session exists or create new
         if (sessionId === 'new') {
           // Create new session
@@ -90,12 +93,12 @@ export default function TherapyPage() {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ anonymous: true }),
           });
-          
+
           const data = await response.json();
           router.replace(`/therapy/${data.sessionId}`);
           return;
         }
-        
+
         // Load existing session
         const response = await fetch(`/api/therapy/session/${sessionId}`);
         if (response.ok) {
@@ -144,11 +147,12 @@ export default function TherapyPage() {
   useEffect(() => {
     const accepted = localStorage.getItem('disclaimerAccepted');
     const acceptedAt = localStorage.getItem('disclaimerAcceptedAt');
-    
+
     if (accepted && acceptedAt) {
       const acceptedDate = new Date(acceptedAt);
-      const hoursSince = (Date.now() - acceptedDate.getTime()) / (1000 * 60 * 60);
-      
+      const hoursSince =
+        (Date.now() - acceptedDate.getTime()) / (1000 * 60 * 60);
+
       if (hoursSince < 24) {
         setShowDisclaimer(false);
       }
@@ -161,7 +165,7 @@ export default function TherapyPage() {
 
     const userMessage = inputMessage.trim();
     setInputMessage('');
-    
+
     // Create user message
     const newUserMessage: Message = {
       id: `msg-${Date.now()}`,
@@ -173,27 +177,31 @@ export default function TherapyPage() {
     // Analyze for crisis before sending
     const crisisAnalysis = crisisDetector.analyzeMessage(userMessage);
     newUserMessage.crisisLevel = crisisAnalysis.level;
-    
+
     // Add user message to chat
     setMessages(prev => [...prev, newUserMessage]);
-    
+
     // Handle crisis detection
-    if (crisisAnalysis.level === 'CRITICAL' || crisisAnalysis.level === 'HIGH') {
+    if (
+      crisisAnalysis.level === 'CRITICAL' ||
+      crisisAnalysis.level === 'HIGH'
+    ) {
       setCrisisInfo({
         level: crisisAnalysis.level,
         contacts: crisisDetector.getEmergencyContacts(),
         message: crisisDetector['getCrisisMessage'](crisisAnalysis.level),
       });
       setShowCrisisModal(true);
-      
+
       if (crisisAnalysis.level === 'CRITICAL') {
         setEmergencyMode(true);
-        
+
         // Add system message about crisis
         const crisisMessage: Message = {
           id: `crisis-${Date.now()}`,
           role: 'system',
-          content: '⚠️ Detectamos que você pode estar passando por um momento muito difícil. Por sua segurança, estamos mostrando recursos de ajuda imediata. Por favor, considere entrar em contato com um dos serviços de emergência listados.',
+          content:
+            '⚠️ Detectamos que você pode estar passando por um momento muito difícil. Por sua segurança, estamos mostrando recursos de ajuda imediata. Por favor, considere entrar em contato com um dos serviços de emergência listados.',
           timestamp: new Date(),
           flagged: true,
         };
@@ -204,7 +212,7 @@ export default function TherapyPage() {
 
     // Send to AI
     setIsTyping(true);
-    
+
     try {
       const response = await fetch('/api/therapy/message', {
         method: 'POST',
@@ -223,7 +231,7 @@ export default function TherapyPage() {
       if (!response.ok) throw new Error('Failed to get response');
 
       const data = await response.json();
-      
+
       // Create AI response message
       const aiMessage: Message = {
         id: `msg-${Date.now()}`,
@@ -233,32 +241,43 @@ export default function TherapyPage() {
       };
 
       setMessages(prev => [...prev, aiMessage]);
-      
+
       // Check if AI suggests professional help
       if (data.suggestProfessionalHelp) {
         setTimeout(() => {
-          toast.info('Lembrete: Considere buscar ajuda profissional para um suporte mais completo.', {
-            duration: 5000,
-          });
+          toast.info(
+            'Lembrete: Considere buscar ajuda profissional para um suporte mais completo.',
+            {
+              duration: 5000,
+            }
+          );
         }, 2000);
       }
-      
     } catch (error) {
       console.error('Error sending message:', error);
       toast.error('Erro ao enviar mensagem. Tente novamente.');
-      
+
       // Add error message
       const errorMessage: Message = {
         id: `error-${Date.now()}`,
         role: 'system',
-        content: 'Desculpe, ocorreu um erro ao processar sua mensagem. Por favor, tente novamente.',
+        content:
+          'Desculpe, ocorreu um erro ao processar sua mensagem. Por favor, tente novamente.',
         timestamp: new Date(),
       };
       setMessages(prev => [...prev, errorMessage]);
     } finally {
       setIsTyping(false);
     }
-  }, [inputMessage, isTyping, emergencyMode, session, messages, userMood, crisisDetector]);
+  }, [
+    inputMessage,
+    isTyping,
+    emergencyMode,
+    session,
+    messages,
+    userMood,
+    crisisDetector,
+  ]);
 
   // Handle Enter key
   const handleKeyPress = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -270,9 +289,9 @@ export default function TherapyPage() {
 
   // Mood selector component
   const MoodSelector = () => (
-    <div className="flex items-center space-x-4 p-4 bg-purple-50 dark:bg-purple-900/20 rounded-lg mb-4">
-      <span className="text-sm font-medium">Como você está se sentindo?</span>
-      <div className="flex space-x-2">
+    <div className='flex items-center space-x-4 p-4 bg-purple-50 dark:bg-purple-900/20 rounded-lg mb-4'>
+      <span className='text-sm font-medium'>Como você está se sentindo?</span>
+      <div className='flex space-x-2'>
         {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(mood => (
           <button
             key={mood}
@@ -287,7 +306,7 @@ export default function TherapyPage() {
           </button>
         ))}
       </div>
-      <div className="text-xs text-gray-600 dark:text-gray-400">
+      <div className='text-xs text-gray-600 dark:text-gray-400'>
         (1 = muito mal, 10 = muito bem)
       </div>
     </div>
@@ -295,9 +314,9 @@ export default function TherapyPage() {
 
   // Safety indicator
   const SafetyIndicator = () => (
-    <div className="flex items-center justify-center space-x-2 p-2 bg-green-50 dark:bg-green-900/20 rounded-lg">
-      <Shield className="w-4 h-4 text-green-600" />
-      <span className="text-xs text-green-600 dark:text-green-400">
+    <div className='flex items-center justify-center space-x-2 p-2 bg-green-50 dark:bg-green-900/20 rounded-lg'>
+      <Shield className='w-4 h-4 text-green-600' />
+      <span className='text-xs text-green-600 dark:text-green-400'>
         Conversa criptografada e segura
       </span>
     </div>
@@ -306,8 +325,8 @@ export default function TherapyPage() {
   // Loading state
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <Loader2 className="w-8 h-8 animate-spin text-purple-600" />
+      <div className='min-h-screen flex items-center justify-center'>
+        <Loader2 className='w-8 h-8 animate-spin text-purple-600' />
       </div>
     );
   }
@@ -323,23 +342,23 @@ export default function TherapyPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-50 to-blue-50 dark:from-gray-900 dark:to-gray-800">
-      <div className="container mx-auto max-w-4xl h-screen flex flex-col">
+    <div className='min-h-screen bg-gradient-to-br from-purple-50 to-blue-50 dark:from-gray-900 dark:to-gray-800'>
+      <div className='container mx-auto max-w-4xl h-screen flex flex-col'>
         {/* Header */}
-        <div className="bg-white dark:bg-gray-900 shadow-md rounded-b-2xl p-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-3">
-              <Brain className="w-8 h-8 text-purple-600" />
+        <div className='bg-white dark:bg-gray-900 shadow-md rounded-b-2xl p-4'>
+          <div className='flex items-center justify-between'>
+            <div className='flex items-center space-x-3'>
+              <Brain className='w-8 h-8 text-purple-600' />
               <div>
-                <h1 className="text-xl font-bold text-gray-800 dark:text-white">
+                <h1 className='text-xl font-bold text-gray-800 dark:text-white'>
                   Assistente de Bem-Estar
                 </h1>
-                <p className="text-xs text-gray-600 dark:text-gray-400">
+                <p className='text-xs text-gray-600 dark:text-gray-400'>
                   Suporte emocional com IA
                 </p>
               </div>
             </div>
-            <div className="flex items-center space-x-4">
+            <div className='flex items-center space-x-4'>
               <SafetyIndicator />
               <button
                 onClick={() => {
@@ -347,45 +366,46 @@ export default function TherapyPage() {
                   setCrisisInfo({
                     level: 'LOW',
                     contacts,
-                    message: 'Recursos de ajuda estão sempre disponíveis quando você precisar.',
+                    message:
+                      'Recursos de ajuda estão sempre disponíveis quando você precisar.',
                   });
                   setShowCrisisModal(true);
                 }}
-                className="flex items-center space-x-2 px-3 py-2 bg-red-100 hover:bg-red-200 dark:bg-red-900/30 dark:hover:bg-red-900/50 rounded-lg transition-colors"
+                className='flex items-center space-x-2 px-3 py-2 bg-red-100 hover:bg-red-200 dark:bg-red-900/30 dark:hover:bg-red-900/50 rounded-lg transition-colors'
               >
-                <Phone className="w-4 h-4 text-red-600 dark:text-red-400" />
-                <span className="text-sm text-red-600 dark:text-red-400">
+                <Phone className='w-4 h-4 text-red-600 dark:text-red-400' />
+                <span className='text-sm text-red-600 dark:text-red-400'>
                   Ajuda
                 </span>
               </button>
             </div>
           </div>
-          
+
           {/* Mood Selector */}
           {!userMood && <MoodSelector />}
         </div>
 
         {/* Messages Area */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-4">
+        <div className='flex-1 overflow-y-auto p-4 space-y-4'>
           {messages.length === 0 && (
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
-              className="text-center py-12"
+              className='text-center py-12'
             >
-              <Heart className="w-16 h-16 text-purple-400 mx-auto mb-4" />
-              <h2 className="text-xl font-semibold text-gray-700 dark:text-gray-300 mb-2">
+              <Heart className='w-16 h-16 text-purple-400 mx-auto mb-4' />
+              <h2 className='text-xl font-semibold text-gray-700 dark:text-gray-300 mb-2'>
                 Bem-vindo ao seu espaço seguro
               </h2>
-              <p className="text-gray-600 dark:text-gray-400 max-w-md mx-auto">
-                Estou aqui para ouvir e apoiar você. Compartilhe seus pensamentos e 
-                sentimentos quando se sentir confortável.
+              <p className='text-gray-600 dark:text-gray-400 max-w-md mx-auto'>
+                Estou aqui para ouvir e apoiar você. Compartilhe seus
+                pensamentos e sentimentos quando se sentir confortável.
               </p>
             </motion.div>
           )}
 
           <AnimatePresence>
-            {messages.map((message) => (
+            {messages.map(message => (
               <motion.div
                 key={message.id}
                 initial={{ opacity: 0, y: 20 }}
@@ -397,7 +417,9 @@ export default function TherapyPage() {
               >
                 <div
                   className={`max-w-3xl flex items-start space-x-3 ${
-                    message.role === 'user' ? 'flex-row-reverse space-x-reverse' : ''
+                    message.role === 'user'
+                      ? 'flex-row-reverse space-x-reverse'
+                      : ''
                   }`}
                 >
                   {/* Avatar */}
@@ -411,11 +433,11 @@ export default function TherapyPage() {
                     }`}
                   >
                     {message.role === 'user' ? (
-                      <User className="w-5 h-5 text-white" />
+                      <User className='w-5 h-5 text-white' />
                     ) : message.role === 'system' ? (
-                      <AlertCircle className="w-5 h-5 text-white" />
+                      <AlertCircle className='w-5 h-5 text-white' />
                     ) : (
-                      <Bot className="w-5 h-5 text-white" />
+                      <Bot className='w-5 h-5 text-white' />
                     )}
                   </div>
 
@@ -427,22 +449,22 @@ export default function TherapyPage() {
                         : message.role === 'system'
                         ? 'bg-orange-100 dark:bg-orange-900/30 text-orange-800 dark:text-orange-200'
                         : 'bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200'
-                    } ${
-                      message.flagged ? 'border-2 border-red-500' : ''
-                    }`}
+                    } ${message.flagged ? 'border-2 border-red-500' : ''}`}
                   >
                     {message.role === 'assistant' ? (
-                      <ReactMarkdown className="prose prose-sm dark:prose-invert max-w-none">
+                      <ReactMarkdown className='prose prose-sm dark:prose-invert max-w-none'>
                         {message.content}
                       </ReactMarkdown>
                     ) : (
-                      <p className="text-sm whitespace-pre-wrap">{message.content}</p>
+                      <p className='text-sm whitespace-pre-wrap'>
+                        {message.content}
+                      </p>
                     )}
-                    
+
                     {/* Crisis indicator */}
                     {message.crisisLevel && message.crisisLevel !== 'LOW' && (
-                      <div className="mt-2 pt-2 border-t border-white/20">
-                        <span className="text-xs opacity-80">
+                      <div className='mt-2 pt-2 border-t border-white/20'>
+                        <span className='text-xs opacity-80'>
                           ⚠️ Nível de atenção: {message.crisisLevel}
                         </span>
                       </div>
@@ -458,13 +480,13 @@ export default function TherapyPage() {
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
-              className="flex items-center space-x-2 text-gray-500 dark:text-gray-400"
+              className='flex items-center space-x-2 text-gray-500 dark:text-gray-400'
             >
-              <Bot className="w-5 h-5" />
-              <div className="flex space-x-1">
-                <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" />
-                <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce delay-100" />
-                <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce delay-200" />
+              <Bot className='w-5 h-5' />
+              <div className='flex space-x-1'>
+                <div className='w-2 h-2 bg-gray-400 rounded-full animate-bounce' />
+                <div className='w-2 h-2 bg-gray-400 rounded-full animate-bounce delay-100' />
+                <div className='w-2 h-2 bg-gray-400 rounded-full animate-bounce delay-200' />
               </div>
             </motion.div>
           )}
@@ -473,21 +495,22 @@ export default function TherapyPage() {
         </div>
 
         {/* Input Area */}
-        <div className="bg-white dark:bg-gray-900 shadow-lg rounded-t-2xl p-4">
+        <div className='bg-white dark:bg-gray-900 shadow-lg rounded-t-2xl p-4'>
           {emergencyMode && (
-            <div className="mb-4 p-3 bg-red-100 dark:bg-red-900/30 rounded-lg">
-              <p className="text-sm text-red-800 dark:text-red-200">
-                <AlertCircle className="inline w-4 h-4 mr-2" />
-                Modo de emergência ativado. Por favor, procure ajuda profissional imediata.
+            <div className='mb-4 p-3 bg-red-100 dark:bg-red-900/30 rounded-lg'>
+              <p className='text-sm text-red-800 dark:text-red-200'>
+                <AlertCircle className='inline w-4 h-4 mr-2' />
+                Modo de emergência ativado. Por favor, procure ajuda
+                profissional imediata.
               </p>
             </div>
           )}
-          
-          <div className="flex space-x-4">
+
+          <div className='flex space-x-4'>
             <textarea
               ref={inputRef}
               value={inputMessage}
-              onChange={(e) => setInputMessage(e.target.value)}
+              onChange={e => setInputMessage(e.target.value)}
               onKeyDown={handleKeyPress}
               placeholder={
                 emergencyMode
@@ -496,32 +519,33 @@ export default function TherapyPage() {
               }
               disabled={emergencyMode}
               rows={2}
-              className="flex-1 resize-none rounded-lg border border-gray-300 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-purple-600 disabled:opacity-50 disabled:cursor-not-allowed"
+              className='flex-1 resize-none rounded-lg border border-gray-300 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-purple-600 disabled:opacity-50 disabled:cursor-not-allowed'
             />
             <button
               onClick={handleSendMessage}
               disabled={!inputMessage.trim() || isTyping || emergencyMode}
-              className="px-6 py-3 bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white rounded-lg font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
+              className='px-6 py-3 bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white rounded-lg font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2'
             >
-              <Send className="w-5 h-5" />
+              <Send className='w-5 h-5' />
               <span>Enviar</span>
             </button>
           </div>
 
           {/* Quick Actions */}
-          <div className="mt-4 flex items-center justify-between">
-            <div className="flex space-x-2">
-              <button className="text-xs text-gray-600 dark:text-gray-400 hover:text-purple-600 dark:hover:text-purple-400">
-                <Activity className="inline w-4 h-4 mr-1" />
+          <div className='mt-4 flex items-center justify-between'>
+            <div className='flex space-x-2'>
+              <button className='text-xs text-gray-600 dark:text-gray-400 hover:text-purple-600 dark:hover:text-purple-400'>
+                <Activity className='inline w-4 h-4 mr-1' />
                 Exercícios
               </button>
-              <button className="text-xs text-gray-600 dark:text-gray-400 hover:text-purple-600 dark:hover:text-purple-400">
-                <Sparkles className="inline w-4 h-4 mr-1" />
+              <button className='text-xs text-gray-600 dark:text-gray-400 hover:text-purple-600 dark:hover:text-purple-400'>
+                <Sparkles className='inline w-4 h-4 mr-1' />
                 Mindfulness
               </button>
             </div>
-            <p className="text-xs text-gray-500 dark:text-gray-600">
-              Lembre-se: Este é um assistente de IA, não substitui ajuda profissional
+            <p className='text-xs text-gray-500 dark:text-gray-600'>
+              Lembre-se: Este é um assistente de IA, não substitui ajuda
+              profissional
             </p>
           </div>
         </div>

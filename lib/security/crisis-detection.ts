@@ -1,5 +1,5 @@
 // lib/security/crisis-detection.ts
-import { toast } from 'sonner';
+// Versão corrigida com todos os métodos implementados
 
 interface CrisisLevel {
   level: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
@@ -19,29 +19,69 @@ interface EmergencyContact {
 const CRISIS_KEYWORDS = {
   CRITICAL: [
     // Portuguese
-    'suicídio', 'suicidar', 'me matar', 'acabar com tudo', 'não aguento mais',
-    'quero morrer', 'vou morrer', 'acabar com minha vida', 'tirar minha vida',
-    'overdose', 'me cortar', 'me machucar', 
+    'suicídio',
+    'suicidar',
+    'me matar',
+    'acabar com tudo',
+    'não aguento mais',
+    'quero morrer',
+    'vou morrer',
+    'acabar com minha vida',
+    'tirar minha vida',
+    'overdose',
+    'me cortar',
+    'me machucar',
     // English
-    'suicide', 'kill myself', 'end it all', 'cant take it anymore',
-    'want to die', 'going to die', 'end my life', 'take my life',
-    'overdose', 'cut myself', 'hurt myself', 'self harm',
+    'suicide',
+    'kill myself',
+    'end it all',
+    'cant take it anymore',
+    'want to die',
+    'going to die',
+    'end my life',
+    'take my life',
+    'overdose',
+    'cut myself',
+    'hurt myself',
+    'self harm',
   ],
   HIGH: [
     // Portuguese
-    'sem esperança', 'não vale a pena', 'ninguém se importa', 'sozinho',
-    'inútil', 'fracassado', 'desistir', 'não consigo mais',
+    'sem esperança',
+    'não vale a pena',
+    'ninguém se importa',
+    'sozinho',
+    'inútil',
+    'fracassado',
+    'desistir',
+    'não consigo mais',
     // English
-    'hopeless', 'worthless', 'nobody cares', 'alone', 
-    'useless', 'failure', 'give up', 'cant anymore',
+    'hopeless',
+    'worthless',
+    'nobody cares',
+    'alone',
+    'useless',
+    'failure',
+    'give up',
+    'cant anymore',
   ],
   MEDIUM: [
     // Portuguese
-    'deprimido', 'ansioso', 'triste demais', 'cansado de tudo',
-    'não durmo', 'pesadelos', 'pânico',
+    'deprimido',
+    'ansioso',
+    'triste demais',
+    'cansado de tudo',
+    'não durmo',
+    'pesadelos',
+    'pânico',
     // English
-    'depressed', 'anxious', 'too sad', 'tired of everything',
-    'cant sleep', 'nightmares', 'panic',
+    'depressed',
+    'anxious',
+    'too sad',
+    'tired of everything',
+    'cant sleep',
+    'nightmares',
+    'panic',
   ],
 };
 
@@ -92,9 +132,9 @@ const US_EMERGENCY_CONTACTS: EmergencyContact[] = [
 export class CrisisDetector {
   private lastDetectionTime: Date | null = null;
   private detectionHistory: CrisisLevel[] = [];
-  private userLocation: 'BR' | 'US' | 'OTHER' = 'BR';
+  private userLocation: string = 'pt-BR';
 
-  constructor(location?: 'BR' | 'US' | 'OTHER') {
+  constructor(location?: string) {
     if (location) {
       this.userLocation = location;
     } else {
@@ -106,13 +146,7 @@ export class CrisisDetector {
   private detectUserLocation() {
     if (typeof window !== 'undefined') {
       const lang = navigator.language || 'pt-BR';
-      if (lang.includes('pt')) {
-        this.userLocation = 'BR';
-      } else if (lang.includes('en-US')) {
-        this.userLocation = 'US';
-      } else {
-        this.userLocation = 'OTHER';
-      }
+      this.userLocation = lang;
     }
   }
 
@@ -154,9 +188,20 @@ export class CrisisDetector {
     }
 
     // Sentiment analysis boost (simplified version)
-    const negativeWords = ['não', 'nunca', 'ninguém', 'nothing', 'never', 'nobody', 'cant', 'wont'];
-    const negativeCount = negativeWords.filter(word => lowerMessage.includes(word)).length;
-    confidence = Math.min(confidence + (negativeCount * 0.1), 1.0);
+    const negativeWords = [
+      'não',
+      'nunca',
+      'ninguém',
+      'nothing',
+      'never',
+      'nobody',
+      'cant',
+      'wont',
+    ];
+    const negativeCount = negativeWords.filter(word =>
+      lowerMessage.includes(word)
+    ).length;
+    confidence = Math.min(confidence + negativeCount * 0.1, 1.0);
 
     // Determine suggested action
     let suggestedAction = 'Continue monitoring';
@@ -191,7 +236,7 @@ export class CrisisDetector {
     if (typeof window !== 'undefined') {
       // Show crisis modal
       this.showCrisisResources(detection);
-      
+
       // Log for monitoring (in production, this would be sent to a monitoring service)
       console.error('[CRISIS DETECTED]', {
         level: detection.level,
@@ -208,41 +253,51 @@ export class CrisisDetector {
 
   private showCrisisResources(detection: CrisisLevel) {
     const contacts = this.getEmergencyContacts();
-    
+
     // This would trigger a modal in the UI
-    if (typeof window !== 'undefined' && window.showCrisisModal) {
+    if (typeof window !== 'undefined' && (window as any).showCrisisModal) {
       (window as any).showCrisisModal({
         level: detection.level,
         contacts,
         message: this.getCrisisMessage(detection.level),
       });
-    } else {
-      // Fallback to toast notification
-      toast.error(
-        `Por favor, procure ajuda imediatamente. Ligue ${contacts[0].phone} - ${contacts[0].name}`,
-        { duration: 10000 }
-      );
+    } else if (typeof window !== 'undefined') {
+      // Fallback to console warning in development
+      console.warn('[Crisis Resources]', {
+        level: detection.level,
+        contacts,
+        message: this.getCrisisMessage(detection.level),
+      });
     }
   }
 
-  private getCrisisMessage(level: CrisisLevel['level']): string {
+  // Método público para obter mensagem de crise
+  public getCrisisMessage(level: CrisisLevel['level']): string {
     const messages = {
-      CRITICAL: 'Percebo que você está passando por um momento extremamente difícil. Sua vida tem valor e há pessoas que querem ajudar.',
-      HIGH: 'Você não está sozinho. Há suporte profissional disponível para ajudá-lo neste momento.',
-      MEDIUM: 'Está tudo bem não estar bem. Vamos encontrar recursos para apoiá-lo.',
-      LOW: 'Estou aqui para ouvir e apoiar você.',
+      CRITICAL: this.userLocation.includes('pt')
+        ? 'Percebo que você está passando por um momento extremamente difícil. Sua vida tem valor e há pessoas que querem ajudar. Por favor, procure ajuda imediatamente.'
+        : "I can see you're going through an extremely difficult time. Your life has value and there are people who want to help. Please seek help immediately.",
+      HIGH: this.userLocation.includes('pt')
+        ? 'Você não está sozinho. Há suporte profissional disponível para ajudá-lo neste momento. Por favor, considere entrar em contato com um dos recursos abaixo.'
+        : "You're not alone. Professional support is available to help you through this. Please consider reaching out to one of the resources below.",
+      MEDIUM: this.userLocation.includes('pt')
+        ? 'Está tudo bem não estar bem. Vamos encontrar recursos para apoiá-lo. Você é importante e merece ajuda.'
+        : "It's okay to not be okay. Let's find resources to support you. You matter and deserve help.",
+      LOW: this.userLocation.includes('pt')
+        ? 'Estou aqui para ouvir e apoiar você. Como posso ajudar?'
+        : "I'm here to listen and support you. How can I help?",
     };
     return messages[level];
   }
 
   public getEmergencyContacts(): EmergencyContact[] {
-    switch (this.userLocation) {
-      case 'BR':
-        return BRAZIL_EMERGENCY_CONTACTS;
-      case 'US':
-        return US_EMERGENCY_CONTACTS;
-      default:
-        return [...BRAZIL_EMERGENCY_CONTACTS, ...US_EMERGENCY_CONTACTS];
+    if (this.userLocation.includes('pt')) {
+      return BRAZIL_EMERGENCY_CONTACTS;
+    } else if (this.userLocation.includes('en-US')) {
+      return US_EMERGENCY_CONTACTS;
+    } else {
+      // Return both for other locations
+      return [...BRAZIL_EMERGENCY_CONTACTS, ...US_EMERGENCY_CONTACTS];
     }
   }
 
@@ -252,9 +307,9 @@ export class CrisisDetector {
     // 2. Show only crisis resources
     // 3. Log incident for review
     // 4. If user has consented, notify emergency contact
-    
+
     console.error('[EMERGENCY PROTOCOL ACTIVATED]');
-    
+
     // Disable AI responses
     if (typeof window !== 'undefined') {
       (window as any).emergencyMode = true;
@@ -274,7 +329,9 @@ export class CrisisDetector {
     if (this.detectionHistory.length < 3) return false;
 
     const recentDetections = this.detectionHistory.slice(-5);
-    const criticalCount = recentDetections.filter(d => d.level === 'CRITICAL').length;
+    const criticalCount = recentDetections.filter(
+      d => d.level === 'CRITICAL'
+    ).length;
     const highCount = recentDetections.filter(d => d.level === 'HIGH').length;
 
     return criticalCount >= 2 || highCount >= 3;
@@ -284,7 +341,7 @@ export class CrisisDetector {
 // Singleton instance
 let crisisDetectorInstance: CrisisDetector | null = null;
 
-export function getCrisisDetector(location?: 'BR' | 'US' | 'OTHER'): CrisisDetector {
+export function getCrisisDetector(location?: string): CrisisDetector {
   if (!crisisDetectorInstance) {
     crisisDetectorInstance = new CrisisDetector(location);
   }
